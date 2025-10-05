@@ -1,0 +1,154 @@
+package com.proyecto.web;
+
+import com.proyecto.model.Actividad;
+
+import javax.servlet.ServletException;
+import javax.servlet.annotation.WebServlet;
+import javax.servlet.http.*;
+import java.io.IOException;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
+import java.util.*;
+import java.util.stream.Collectors;
+
+@WebServlet("/HorarioServlet")
+public class HorarioServlet extends HttpServlet {
+
+    // Simulación de almacenamiento en sesión (en práctica usar base de datos)
+    @Override
+    protected void doGet(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        HttpSession session = request.getSession();
+
+        // Obtener el mapa horarios desde sesión, o inicializar vacío
+        @SuppressWarnings("unchecked")
+        Map<LocalDate, Map<String, String>> horarios =
+                (Map<LocalDate, Map<String, String>>) session.getAttribute("horarios");
+        if (horarios == null) {
+            horarios = new TreeMap<>();
+            session.setAttribute("horarios", horarios);
+        }
+
+        String fechaParam = request.getParameter("fecha");
+        if (fechaParam != null) {
+            try {
+                LocalDate fechaConsulta = LocalDate.parse(fechaParam);
+                Map<String, String> actividades = horarios.getOrDefault(fechaConsulta, new TreeMap<>());
+                request.setAttribute("fechaConsulta", fechaConsulta);
+                request.setAttribute("actividades", actividades);
+            } catch (DateTimeParseException e) {
+                request.setAttribute("error", "Formato de fecha inválido. Use aaaa-MM-dd");
+            }
+        }
+
+        request.getRequestDispatcher("horario.jsp").forward(request, response);
+    }
+
+    @Override
+    protected void doPost(HttpServletRequest request, HttpServletResponse response) throws ServletException, IOException {
+        HttpSession session = request.getSession();
+
+        @SuppressWarnings("unchecked")
+        Map<LocalDate, Map<String, String>> horarios =
+                (Map<LocalDate, Map<String, String>>) session.getAttribute("horarios");
+        if (horarios == null) {
+            horarios = new TreeMap<>();
+            session.setAttribute("horarios", horarios);
+        }
+
+        // Leer parámetros del formulario
+        String fechaStr = request.getParameter("fecha");
+        String hora = request.getParameter("hora");
+        String descripcion = request.getParameter("descripcion");
+        String repetir = request.getParameter("repetir");
+        String repetirHastaStr = request.getParameter("repetirHasta");
+
+        if (fechaStr == null || hora == null || descripcion == null || repetir == null) {
+            request.setAttribute("error", "Todos los campos son obligatorios.");
+            doGet(request, response);
+            return;
+        }
+
+        try {
+            LocalDate fechaInicial = LocalDate.parse(fechaStr);
+            LocalDate repetirHasta = repetirHastaStr != null && !repetirHastaStr.isBlank() ? LocalDate.parse(repetirHastaStr) : fechaInicial;
+
+            List<LocalDate> fechasAGenerar = new ArrayList<>();
+
+            switch (repetir) {
+                case "Nunca":
+                    fechasAGenerar.add(fechaInicial);
+                    break;
+                case "Diariamente":
+                    fechasAGenerar = generarFechasDiarias(fechaInicial, repetirHasta);
+                    break;
+                case "Semanalmente":
+                    fechasAGenerar = generarFechasSemanales(fechaInicial, repetirHasta);
+                    break;
+                case "Mensualmente":
+                    fechasAGenerar = generarFechasMensuales(fechaInicial, repetirHasta);
+                    break;
+                default:
+                    fechasAGenerar.add(fechaInicial);
+            }
+
+            // Insertar actividades en las fechas generadas, verificando conflictos
+            List<String> conflictos = new ArrayList<>();
+            for (LocalDate f : fechasAGenerar) {
+                Map<String, String> actividadesDia = horarios.getOrDefault(f, new TreeMap<>());
+                if (actividadesDia.containsKey(hora) && !actividadesDia.get(hora).equals(descripcion)) {
+                    conflictos.add(f.toString() + " " + hora);
+                }
+            }
+
+            boolean reemplazar = true;
+            if (!conflictos.isEmpty() && fechasAGenerar.size() > 1) {
+                // Por simplicidad reemplazamos siempre; en app real mostrar confirmación
+                reemplazar = true; 
+            }
+
+            if (reemplazar) {
+                for (LocalDate f : fechasAGenerar) {
+                    horarios.computeIfAbsent(f, k -> new TreeMap<>()).put(hora, descripcion);
+                }
+                request.setAttribute("mensaje", "Actividad guardada con éxito para " + fechasAGenerar.size() + " fecha(s).");
+            } else {
+                request.setAttribute("error", "Conflictos detectados y operación cancelada.");
+            }
+
+        } catch (DateTimeParseException e) {
+            request.setAttribute("error", "Formato de fecha inválido. Use aaaa-MM-dd");
+        }
+
+        doGet(request, response);
+    }
+
+    private List<LocalDate> generarFechasDiarias(LocalDate inicio, LocalDate fin) {
+        List<LocalDate> fechas = new ArrayList<>();
+        LocalDate cur = inicio;
+        while (!cur.isAfter(fin)) {
+            fechas.add(cur);
+            cur = cur.plusDays(1);
+        }
+        return fechas;
+    }
+
+    private List<LocalDate> generarFechasSemanales(LocalDate inicio, LocalDate fin) {
+        List<LocalDate> fechas = new ArrayList<>();
+        LocalDate cur = inicio;
+        while (!cur.isAfter(fin)) {
+            fechas.add(cur);
+            cur = cur.plusWeeks(1);
+        }
+        return fechas;
+    }
+
+    private List<LocalDate> generarFechasMensuales(LocalDate inicio, LocalDate fin) {
+        List<LocalDate> fechas = new ArrayList<>();
+        LocalDate cur = inicio;
+        while (!cur.isAfter(fin)) {
+            fechas.add(cur);
+            cur = cur.plusMonths(1);
+        }
+        return fechas;
+    }
+}
