@@ -1,0 +1,56 @@
+<%@ taglib prefix="c" uri="http://java.sun.com/jsp/jstl/core" %>
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8" />
+    <title>Gestión de Horarios</title>
+</head>
+<body>
+    <h1>Gestión de Horarios</h1>
+
+    <c:if test="${not empty error}">
+        <p style="color: red;">${error}</p>
+    </c:if>
+    <c:if test="${not empty mensaje}">
+        <p style="color: green;">${mensaje}</p>
+    </c:if>
+
+    <form action="HorarioServlet" method="post">
+        Fecha (aaaa-MM-dd): <input type="date" name="fecha" required><br>
+        Hora (HH:mm): <input type="time" name="hora" required><br>
+        Descripción: <input type="text" name="descripcion" required><br>
+        Repetir:
+        <select name="repetir" required>
+            <option value="Nunca">Nunca</option>
+            <option value="Diariamente">Diariamente</option>
+            <option value="Semanalmente">Semanalmente</option>
+            <option value="Mensualmente">Mensualmente</option>
+        </select><br>
+        Repetir hasta (fecha): <input type="date" name="repetirHasta"><br>
+        <input type="submit" value="Guardar Actividad">
+    </form>
+
+    <hr>
+
+    <form action="HorarioServlet" method="get">
+        Fecha a consultar: <input type="date" name="fecha" required>
+        <input type="submit" value="Consultar Actividades">
+    </form>
+
+    <c:if test="${not empty actividades}">
+        <h2>Actividades para la fecha ${fechaConsulta}:</h2>
+        <table border="1" cellpadding="5" cellspacing="0">
+            <tr>
+                <th>Hora</th>
+                <th>Descripción</th>
+            </tr>
+            <c:forEach var="entry" items="${actividades.entrySet()}">
+                <tr>
+                    <td>${entry.key}</td>
+                    <td>${entry.value}</td>
+                </tr>
+            </c:forEach>
+        </table>
+    </c:if>
+</body>
+</html>
